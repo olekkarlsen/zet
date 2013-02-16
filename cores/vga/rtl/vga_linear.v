@@ -1,6 +1,7 @@
 /*
  *  Linear mode graphics for VGA
  *  Copyright (C) 2010  Zeus Gomez Marmolejo <zeus@aluzina.org>
+ *  with modifications by Charley Picker <charleypicker@yahoo.com>
  *
  *  This file is part of the Zet processor. This processor is free
  *  hardware; you can redistribute it and/or modify it under the terms of
@@ -20,6 +21,8 @@
 module vga_linear (
     input clk,
     input rst,
+    
+    input enable,
 
     // CSR slave interface for reading
     output [17:1] csr_adr_o,
@@ -61,16 +64,40 @@ module vga_linear (
   // Behaviour
   // Pipeline count
   always @(posedge clk)
-    pipe <= rst ? 6'b0 : { pipe[4:0], ~h_count[0] };
-
+    if (rst)
+      begin
+        pipe <= 6'b0;    
+      end
+    else
+      if (enable)
+        begin
+          pipe <= { pipe[4:0], ~h_count[0] };
+        end
+        
   // video_on_h
   always @(posedge clk)
-    video_on_h <= rst ? 5'b0 : { video_on_h[3:0], video_on_h_i };
-
+    if (rst)
+      begin
+        video_on_h <= 5'b0;
+      end
+    else
+      if (enable)
+        begin
+          video_on_h <= { video_on_h[3:0], video_on_h_i };
+        end
+        
   // horiz_sync
   always @(posedge clk)
-    horiz_sync <= rst ? 5'b0 : { horiz_sync[3:0], horiz_sync_i };
-
+    if (rst)
+      begin
+        horiz_sync <= 5'b0;
+      end
+    else
+      if (enable)
+        begin
+          horiz_sync <= { horiz_sync[3:0], horiz_sync_i };
+        end
+        
   // Address generation
   always @(posedge clk)
     if (rst)
@@ -82,19 +109,28 @@ module vga_linear (
         plane_addr  <= 2'b00;
       end
     else
-      begin
-        // Loading new row_addr and col_addr when h_count[3:0]==4'h0
-        // v_count * 5 * 32
-        row_addr    <= { v_count[8:1], 2'b00 } + v_count[8:1];
-        col_addr    <= h_count[9:3];
-        plane_addr0 <= h_count[2:1];
+      if (enable)
+        begin
+          // Loading new row_addr and col_addr when h_count[3:0]==4'h0
+          // v_count * 5 * 32
+          row_addr    <= { v_count[8:1], 2'b00 } + v_count[8:1];
+          col_addr    <= h_count[9:3];
+          plane_addr0 <= h_count[2:1];
 
-        word_offset <= { row_addr + col_addr[6:4], col_addr[3:0] };
-        plane_addr  <= plane_addr0;
-      end
+          word_offset <= { row_addr + col_addr[6:4], col_addr[3:0] };
+          plane_addr  <= plane_addr0;
+        end
 
   // color_l
   always @(posedge clk)
-    color_l <= rst ? 8'h0 : (pipe[4] ? csr_dat_i[7:0] : color_l);
-
+    if (rst)
+      begin
+        color_l <= 8'h0;
+      end
+    else
+      if (enable)
+        begin
+          color_l <= (pipe[4] ? csr_dat_i[7:0] : color_l);
+        end
+        
 endmodule

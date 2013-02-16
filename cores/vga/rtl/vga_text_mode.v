@@ -1,6 +1,7 @@
 /*
  *  Text mode graphics for VGA
  *  Copyright (C) 2010  Zeus Gomez Marmolejo <zeus@aluzina.org>
+ *  with modifications by Charley Picker <charleypicker@yahoo.com>
  *
  *  This file is part of the Zet processor. This processor is free
  *  hardware; you can redistribute it and/or modify it under the terms of
@@ -35,6 +36,8 @@
 module vga_text_mode (
     input clk,
     input rst,
+    
+    input enable,
 
     // CSR slave interface for reading
     output reg [16:1] csr_adr_o,
@@ -121,20 +124,21 @@ module vga_text_mode (
         csr_adr_o <= 16'h0;
       end
     else
-      begin
-        // h_count[2:0] == 001
-        col_addr  <= h_count[9:3];
-        row_addr  <= v_count[8:4];
+      if (enable)
+        begin
+          // h_count[2:0] == 001
+          col_addr  <= h_count[9:3];
+          row_addr  <= v_count[8:4];
 
-        // h_count[2:0] == 010
-        ver_addr  <= { 2'b00, row_addr } + { row_addr, 2'b00 };
-        // ver_addr = row_addr x 5
-        hor_addr  <= col_addr;
+          // h_count[2:0] == 010
+          ver_addr  <= { 2'b00, row_addr } + { row_addr, 2'b00 };
+          // ver_addr = row_addr x 5
+          hor_addr  <= col_addr;
 
-        // h_count[2:0] == 011
-        // vga_addr = row_addr * 80 + hor_addr
-        csr_adr_o <= { 5'h0, vga_addr };
-      end
+          // h_count[2:0] == 011
+          // vga_addr = row_addr * 80 + hor_addr
+          csr_adr_o <= { 5'h0, vga_addr };
+        end
 
   // cursor
   always @(posedge clk)
@@ -144,36 +148,77 @@ module vga_text_mode (
         cursor_on_h <= 1'b0;
       end
     else
-      begin
-        cursor_on_h <= (h_count[9:3] == hcursor[6:0]);
-        cursor_on_v <= (v_count[8:4] == vcursor[4:0])
-                    && ({2'b00, v_count[3:0]} >= cur_start)
-                    && ({2'b00, v_count[3:0]} <= cur_end);
-      end
+      if (enable)
+        begin
+          cursor_on_h <= (h_count[9:3] == hcursor[6:0]);
+          cursor_on_v <= (v_count[8:4] == vcursor[4:0])
+                      && ({2'b00, v_count[3:0]} >= cur_start)
+                      && ({2'b00, v_count[3:0]} <= cur_end);
+        end
 
   // Pipeline count
   always @(posedge clk)
-    pipe <= rst ? 8'b0 : { pipe[6:0], (h_count[2:0]==3'b0) };
-
+    if (rst)
+      begin
+        pipe <= 8'b0;
+      end
+    else
+      if (enable)
+        begin
+          pipe <= { pipe[6:0], (h_count[2:0]==3'b0) };
+        end
+    
   // attr_data_out
-  always @(posedge clk) attr_data_out <= pipe[5] ? csr_dat_i[15:8]
-                                                 : attr_data_out;
+  always @(posedge clk)
+    if (enable)
+     begin
+       attr_data_out <= pipe[5] ? csr_dat_i[15:8]
+                                : attr_data_out;
+     end
 
   // char_addr_in
-  always @(posedge clk) char_addr_in <= pipe[5] ? csr_dat_i[7:0]
-                                                : char_addr_in;
+  always @(posedge clk)
+    if (enable)
+      begin
+        char_addr_in <= pipe[5] ? csr_dat_i[7:0]
+                                : char_addr_in;
+      end   
 
   // video_on_h
   always @(posedge clk)
-    video_on_h <= rst ? 10'b0 : { video_on_h[8:0], video_on_h_i };
-
+    if (rst)
+      begin
+        video_on_h <= 10'b0;
+      end
+    else
+      if (enable)
+        begin
+          video_on_h <= { video_on_h[8:0], video_on_h_i };    
+        end
+    
   // horiz_sync
   always @(posedge clk)
-    horiz_sync <= rst ? 10'b0 : { horiz_sync[8:0], horiz_sync_i };
-
+    if (rst)
+      begin
+        horiz_sync <= 10'b0;
+      end
+    else
+      if (enable)
+        begin
+          horiz_sync <= { horiz_sync[8:0], horiz_sync_i };
+        end
+ 
   // blink_count
   always @(posedge clk)
-    blink_count <= rst ? 23'h0 : (blink_count + 23'h1);
+    if (rst)
+      begin
+        blink_count <= 23'h0;
+      end
+    else
+      if (enable)
+        begin
+          blink_count <= (blink_count + 23'h1);    
+        end
 
   // Video shift register
   always @(posedge clk)
@@ -184,18 +229,28 @@ module vga_text_mode (
         vga_shift <= 8'h0;
       end
     else
-      if (load_shift)
+      if (enable)
         begin
-          fg_colour <= attr_data_out[3:0];
-          bg_colour <= attr_data_out[6:4];
-          cursor_on <= (cursor_on1 | attr_data_out[7]) & blink_count[22];
-          vga_shift <= char_data_out;
-        end
-      else vga_shift <= { vga_shift[6:0], 1'b0 };
+          if (load_shift)
+            begin
+              fg_colour <= attr_data_out[3:0];
+              bg_colour <= attr_data_out[6:4];
+              cursor_on <= (cursor_on1 | attr_data_out[7]) & blink_count[22];
+              vga_shift <= char_data_out;
+            end
+          else vga_shift <= { vga_shift[6:0], 1'b0 };      
+        end      
 
   // pixel attribute
   always @(posedge clk)
-    if (rst) attr <= 4'h0;
-    else attr <= fg_or_bg ? fg_colour : { 1'b0, bg_colour };
+    if (rst)
+      begin
+        attr <= 4'h0;    
+      end
+    else
+      if (enable)
+        begin
+          attr <= fg_or_bg ? fg_colour : { 1'b0, bg_colour };    
+        end
 
 endmodule

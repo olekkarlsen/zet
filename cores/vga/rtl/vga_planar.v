@@ -1,6 +1,7 @@
 /*
  *  Planar mode graphics for VGA
  *  Copyright (C) 2010  Zeus Gomez Marmolejo <zeus@aluzina.org>
+ *  with modifications by Charley Picker <charleypicker@yahoo.com>
  *
  *  This file is part of the Zet processor. This processor is free
  *  hardware; you can redistribute it and/or modify it under the terms of
@@ -20,6 +21,8 @@
 module vga_planar (
     input clk,
     input rst,
+    
+    input enable,
 
     // CSR slave interface for reading
     output [17:1] csr_adr_o,
@@ -82,17 +85,41 @@ module vga_planar (
   // Behaviour
   // Pipeline count
   always @(posedge clk)
-    pipe <= rst ? 8'b0 : { pipe[6:0],
-      x_dotclockdiv2 ? (h_count[4:0]==5'h0) : (h_count[3:0]==4'h0) };
-
+    if (rst)
+      begin
+        pipe <= 8'b0;
+      end
+    else
+      if (enable)
+        begin
+          pipe <= { pipe[6:0],
+            x_dotclockdiv2 ? (h_count[4:0]==5'h0) : (h_count[3:0]==4'h0) };    
+        end
+  
   // video_on_h
   always @(posedge clk)
-    video_on_h <= rst ? 10'b0 : { video_on_h[8:0], video_on_h_i };
-
+    if (rst)
+      begin
+        video_on_h <= 10'b0;
+      end
+    else
+      if (enable)
+        begin
+          video_on_h <= { video_on_h[8:0], video_on_h_i };
+        end
+  
   // horiz_sync
   always @(posedge clk)
-    horiz_sync <= rst ? 10'b0 : { horiz_sync[8:0], horiz_sync_i };
-
+    if (rst)
+      begin
+        horiz_sync <= 10'b0;
+      end
+    else
+      if (enable)
+        begin
+          horiz_sync <= { horiz_sync[8:0], horiz_sync_i };
+        end
+  
   // Address generation
   always @(posedge clk)
     if (rst)
@@ -104,20 +131,21 @@ module vga_planar (
         plane_addr  <= 2'b00;
       end
     else
-      begin
-        // Loading new row_addr and col_addr when h_count[3:0]==4'h0
-        // v_count * 40 or 22 (depending on x_dotclockdiv2)
-        row_addr <= { v_count[9:1], v_count0, 2'b00 } + { v_count[9:1], v_count0 }
-                  + (x_dotclockdiv2 ? v_count[9:1] : 9'h0);
-        col_addr <= x_dotclockdiv2 ? h_count[9:5] : h_count[9:4];
-        plane_addr0 <= h_count[1:0];
+      if (enable)
+        begin
+          // Loading new row_addr and col_addr when h_count[3:0]==4'h0
+          // v_count * 40 or 22 (depending on x_dotclockdiv2)
+          row_addr <= { v_count[9:1], v_count0, 2'b00 } + { v_count[9:1], v_count0 }
+                    + (x_dotclockdiv2 ? v_count[9:1] : 9'h0);
+          col_addr <= x_dotclockdiv2 ? h_count[9:5] : h_count[9:4];
+          plane_addr0 <= h_count[1:0];
 
-        // Load new word_offset at +1
-        word_offset <= (x_dotclockdiv2 ? { row_addr, 1'b0 }
-                                       : { row_addr, 3'b000 }) + col_addr;
-        plane_addr  <= plane_addr0;
-      end
-
+          // Load new word_offset at +1
+          word_offset <= (x_dotclockdiv2 ? { row_addr, 1'b0 }
+                                         : { row_addr, 3'b000 }) + col_addr;
+          plane_addr  <= plane_addr0;
+        end
+      
   // Temporary plane data
   always @(posedge clk)
     if (rst)
@@ -127,12 +155,13 @@ module vga_planar (
         plane2_tmp <= 16'h0;
       end
     else
-      begin
-        // Load plane0 when pipe == 4
-        plane0_tmp <= pipe[4] ? csr_dat_i : plane0_tmp;
-        plane1_tmp <= pipe[5] ? csr_dat_i : plane1_tmp;
-        plane2_tmp <= pipe[6] ? csr_dat_i : plane2_tmp;
-     end
+      if (enable)
+        begin
+          // Load plane0 when pipe == 4
+          plane0_tmp <= pipe[4] ? csr_dat_i : plane0_tmp;
+          plane1_tmp <= pipe[5] ? csr_dat_i : plane1_tmp;
+          plane2_tmp <= pipe[6] ? csr_dat_i : plane2_tmp;    
+        end
 
   // Plane data
   always @(posedge clk)
@@ -144,12 +173,13 @@ module vga_planar (
         plane3 <= 16'h0;
       end
     else
-      begin
-        plane0 <= pipe[7] ? plane0_tmp : plane0;
-        plane1 <= pipe[7] ? plane1_tmp : plane1;
-        plane2 <= pipe[7] ? plane2_tmp : plane2;
-        plane3 <= pipe[7] ? csr_dat_i : plane3;
-      end
+      if (enable)        
+        begin
+          plane0 <= pipe[7] ? plane0_tmp : plane0;
+          plane1 <= pipe[7] ? plane1_tmp : plane1;
+          plane2 <= pipe[7] ? plane2_tmp : plane2;
+          plane3 <= pipe[7] ? csr_dat_i : plane3;
+        end
 
   // Bit masks
   always @(posedge clk)
@@ -159,15 +189,24 @@ module vga_planar (
         bit_mask1 <= 8'h0;
       end
     else
-      begin
-        bit_mask0 <= (h_count[0] & x_dotclockdiv2) ? bit_mask0
-                   : { pipe[7], bit_mask0[7:1] };
-        bit_mask1 <= (h_count[0] & x_dotclockdiv2) ? bit_mask1
-                   : { bit_mask0[0], bit_mask1[7:1] };
-      end
+      if (enable)    
+        begin
+          bit_mask0 <= (h_count[0] & x_dotclockdiv2) ? bit_mask0
+                     : { pipe[7], bit_mask0[7:1] };
+          bit_mask1 <= (h_count[0] & x_dotclockdiv2) ? bit_mask1
+                     : { bit_mask0[0], bit_mask1[7:1] };
+        end
 
   // attr
   always @(posedge clk)
-    attr <= rst ? 4'h0 : (attr_plane_enable & { bit3, bit2, bit1, bit0 });
+    if (rst)
+      begin
+        attr <= 4'h0; 
+      end
+    else
+      if (enable)
+        begin
+          attr <= (attr_plane_enable & { bit3, bit2, bit1, bit0 });
+        end  
 
 endmodule
