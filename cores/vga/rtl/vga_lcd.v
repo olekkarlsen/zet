@@ -87,11 +87,22 @@ module vga_lcd (
   wire video_on_v_seq_o;
   wire [7:0] character_seq_o;
   
+  wire csr_ack_i;
+  wire mem_cyc;
+  
+  wire next_crtc_seq_cyc;
+  
   wire enable_crtc;
   wire enable_sequencer;
+  
+  reg [1:0] four_cyc_counter;
+    
+  wire read_fifo;
+  wire fifo_full;
+  
+  wire next_pal_dac_cyc;
   wire enable_pal_dac;
-  
-  
+    
   // Module instances
   vga_crtc crtc (
     .clk (clk),              // 25 Mhz clock
@@ -222,8 +233,37 @@ module vga_lcd (
   );
   
   // Continuous assignments
-  assign enable_crtc = 1'b1;
-  assign enable_sequencer = 1'b1;
-  assign enable_pal_dac = 1'b1;
-
+  assign csr_ack_i = 1'b1;   // csr_ack_i has not been implemented yet(Single cycle synchronous SRAM memory)
+  assign fifo_full = 1'b0;   // fifo_full signal has not been implemented yet
+  
+  // Determine next crtc/sequencer cycle
+  assign mem_cyc = csr_stb_o & (csr_stb_o & csr_ack_i);   // Is there an active memory cycle?
+  assign next_crtc_seq_cyc = (mem_cyc | !fifo_full);           // Keep the fifo full but do not stall active memory cycle
+  
+  // These signals enable and control when the next crtc/sequencer cycle should occur
+  assign enable_crtc = next_crtc_seq_cyc;
+  assign enable_sequencer = next_crtc_seq_cyc;
+  
+  // Determine when next cycle in pal_dac should occur
+  // Provide steady signal to read next fifo value 
+  assign read_fifo = (four_cyc_counter == 3'b00) ? 1'b1 : 1'b0;   // Read fifo on cycle count 0 
+    
+  // Provide steady 25Mhz signal for pal_dac stage (Assumes 100Mhz base clock)
+  assign next_pal_dac_cyc = (four_cyc_counter == 3'b11) ? 1'b1 : 1'b0;  // Generate next pal_dac pulse on cycle count 3
+  
+  // This signal enables and controls when the next pal_dac cycle should occure
+  assign enable_pal_dac = next_crtc_seq_cyc;  // fifo has not been implemented yet
+  
+  // Behaviour
+  // Provide counter for pal_dac stage
+  always @(posedge clk)
+  if (rst)
+    begin
+      four_cyc_counter = 2'b00;
+    end
+  else
+    begin
+      four_cyc_counter = four_cyc_counter + 2'b01;  // Roll over every four cycles
+    end
+  
 endmodule

@@ -69,6 +69,7 @@ module vga_crtc (
   assign ver_sync_beg = st_ver_retr;
   assign ver_sync_end = end_ver_retr + 4'd1;
   
+  // Behaviour
   // Sync generation & timing process
   // Generate horizontal and vertical timing signals for video signal
   always @(posedge clk)

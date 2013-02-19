@@ -187,6 +187,7 @@ module vga_sequencer (
   assign character_seq_o = graphics_alpha ?
     (shift_reg1 ? color : { 4'b0, attr_wm }) : { 4'b0, attr_tm };
     
+  // Behaviour
   // Video_on pipe used only for video_on_h signal 
   always @(posedge clk)
     if (rst)

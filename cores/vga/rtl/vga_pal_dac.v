@@ -132,6 +132,7 @@ module vga_pal_dac (
   assign v_retrace   = !video_on_v;
   assign vh_retrace  = v_retrace | !video_on_h;
 
+  // Behaviour
   // index_gm
   always @(posedge clk)
     if (rst)
