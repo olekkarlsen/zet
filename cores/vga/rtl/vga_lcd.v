@@ -79,9 +79,10 @@ module vga_lcd (
   wire [9:0] h_count;   // Horizontal pipeline delay is 2 cycles
   wire horiz_sync_i;
   wire [9:0] v_count;   // 0 to VER_SCAN_END
+  wire vert_sync_crtc_o;
   wire video_on_h_i;
   wire video_on_v;
-  
+    
   // Hookup sequencer output stage to fifo input stage 
   wire [11:0] fb_dat_i;
   wire horiz_sync_seq_o;
@@ -101,7 +102,7 @@ module vga_lcd (
   // fifo control signals
   wire fill_fifo;
   wire read_fifo;
-  wire fifo_full;
+  wire fifo_low;
   wire [4:0] fb_data_fifo_nword;
   
   // Memory controller signals
@@ -147,7 +148,7 @@ module vga_lcd (
     .horiz_sync_i (horiz_sync_i),
     
     .v_count (v_count),
-    .vert_sync (vert_sync),
+    .vert_sync (vert_sync_crtc_o),
     
     .video_on_h_i (video_on_h_i),
     .video_on_v (video_on_v)
@@ -166,7 +167,7 @@ module vga_lcd (
     .horiz_sync_i (horiz_sync_i),
     
     .v_count (v_count),
-    .vert_sync (vert_sync),
+    .vert_sync (vert_sync_crtc_o),
     
     .video_on_h_i (video_on_h_i),
     .video_on_v (video_on_v),
@@ -277,13 +278,12 @@ module vga_lcd (
   assign fb_video_on_v_seq_o = fb_dat_o [8];
   assign fb_character_seq_o = fb_dat_o [7:0];
   
-  assign fifo_full = ~fb_data_fifo_nword[4] & ~fb_data_fifo_nword[3];  // Allow fifo to over fill to complete memory cycle
-  // assign fifo_full = 1'b0;  // fifo_full signal has not been implemented yet
-  
+  assign fifo_low = ~fb_data_fifo_nword[4] & ~fb_data_fifo_nword[3];       // Allow fifo to over fill to complete memory cycle
+    
   // Determine next crtc/sequencer cycle
   assign mem_cyc = csr_stb_o;                                              // Is there an active memory cycle in progress?
   assign mem_cyc_complete = csr_stb_o & csr_ack_i;                         // Has the memory cycle completed?
-  assign fill_fifo = !fifo_full;                                           // The fifo can be filled until it is full
+  assign fill_fifo = fifo_low;                                             // The fifo can be filled until it is full
   assign next_crtc_seq_cyc = (mem_cyc_complete | (fill_fifo & !mem_cyc));  // Keep the fifo full but do not stall active memory cycle
   
   // These signals enable and control when the next crtc/sequencer cycle should occur
@@ -292,13 +292,16 @@ module vga_lcd (
   
   // Determine when next cycle in pal_dac should occur
   // Provide steady signal to read next fifo value 
-  assign read_fifo = (four_cyc_counter == 2'b00) ? 1'b1 : 1'b0;            // Read fifo on cycle count 0 
+  //assign read_fifo = (four_cyc_counter == 2'b01) ? 1'b1 : 1'b0;            // Read fifo on cycle count 1 (100Mhz version)
+  assign read_fifo = next_crtc_seq_cyc;  // 25Mhz version works
     
   // Provide steady 25Mhz signal for pal_dac stage (Assumes 100Mhz base clock)
-  assign next_pal_dac_cyc = (four_cyc_counter == 2'b11) ? 1'b1 : 1'b0;     // Generate next pal_dac pulse on cycle count 3
+  //assign next_pal_dac_cyc = (four_cyc_counter == 2'b11) ? 1'b1 : 1'b0;     // Generate next pal_dac pulse on cycle count 3 (100Mhz)
+  assign next_pal_dac_cyc = next_crtc_seq_cyc;  // 25Mhz version works
   
   // This signal enables and controls when the next pal_dac cycle should occure
-  assign enable_pal_dac = next_crtc_seq_cyc;                               // fifo has not been implemented yet
+  //assign enable_pal_dac = next_pal_dac_cyc;  // 100Mhz version
+  assign enable_pal_dac = next_pal_dac_cyc;  // 25Mhz version works
   
   // Behaviour
   // Provide counter for pal_dac stage
