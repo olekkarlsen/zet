@@ -19,7 +19,7 @@
 
 module vga (
     // Wishbone signals
-    input         wb_clk_i,     // 25 Mhz VDU clock
+    input         wb_clk_i,     // 100 Mhz VDU clock
     input         wb_rst_i,
     input  [15:0] wb_dat_i,
     output [15:0] wb_dat_o,

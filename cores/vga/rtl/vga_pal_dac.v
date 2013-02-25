@@ -19,7 +19,7 @@
  */
 
 module vga_pal_dac (
-    input clk,              // 25 Mhz clock
+    input clk,              // 100 Mhz clock
     input rst,
     
     input enable_pal_dac,
@@ -132,7 +132,6 @@ module vga_pal_dac (
   assign v_retrace   = !video_on_v;
   assign vh_retrace  = v_retrace | !video_on_h;
 
-  // Behaviour
   // index_gm
   always @(posedge clk)
     if (rst)

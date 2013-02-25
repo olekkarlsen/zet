@@ -552,7 +552,7 @@ module kotku (
     .wbs_ack_o (vga_ack_o_s),
 
     // Wishbone master interface
-    .wbm_clk_i (vga_clk),
+    .wbm_clk_i (sdram_clk),
     .wbm_adr_o (vga_adr_i),
     .wbm_dat_o (vga_dat_i),
     .wbm_dat_i (vga_dat_o),
@@ -574,7 +574,7 @@ module kotku (
     .wb_rst_i (rst),
 
     // Wishbone slave interface
-    .wb_clk_i (vga_clk),   // 25MHz VGA clock
+    .wb_clk_i (sdram_clk),   // 100MHz VGA clock
     .wb_dat_i (vga_dat_i),
     .wb_dat_o (vga_dat_o),
     .wb_adr_i (vga_adr_i[16:1]),  // 128K
@@ -601,7 +601,7 @@ module kotku (
   );
 
   csr_sram csr_sram (
-    .sys_clk (vga_clk),
+    .sys_clk (sdram_clk),
 
     // CSR slave interface
     .csr_adr_i (csrm_adr_o),
@@ -1008,7 +1008,7 @@ module kotku (
   assign sdram_clk_ = sdram_clk;
   
   // Required de2 adv7123 vga dac clock
-  assign	tft_lcd_clk_ = vga_clk;
+  assign	tft_lcd_clk_ = sdram_clk;
 
   assign ledg_[3:0] = pc[3:0];
 

@@ -19,7 +19,7 @@
  */
 
 module vga_lcd (
-    input clk,              // 25 Mhz clock
+    input clk,              // 100 Mhz clock
     input rst,
 
     input shift_reg1,       // if set: 320x200
@@ -99,24 +99,25 @@ module vga_lcd (
   wire fb_video_on_v_seq_o;
   wire [7:0] fb_character_seq_o;
   
-  // fifo control signals
-  wire fill_fifo;
-  wire read_fifo;
-  wire fifo_low;
-  wire [4:0] fb_data_fifo_nword;
+  reg next_crtc_cyc;
+  reg next_sequencer_cyc;
   
   // Memory controller signals
-  wire csr_ack_i;  // csr_ack_i has not been implemented yet
-  wire mem_cyc_complete;
-  wire mem_cyc;
+  wire mem_cyc_active;
+  reg [3:0] mem_cyc_p;
   
+  reg read_fifo;
+  wire fill_fifo;
+  wire fifo_low;
+  wire [4:0] fb_data_fifo_nword;
+    
   wire enable_crtc;
   wire enable_sequencer;
   wire enable_pal_dac;
   
   wire next_crtc_seq_cyc;
-  wire next_pal_dac_cyc; 
-  
+  reg next_pal_dac_cyc;
+   
   reg [1:0] four_cyc_counter;
     
   // Module instances
@@ -207,7 +208,7 @@ module vga_lcd (
 	.aclr   ( 1'b1               ),
 	.sclr   ( rst                ),
 	.d      ( fb_dat_i           ),
-	.wreq   ( next_crtc_seq_cyc  ),
+	.wreq   ( fill_fifo          ),
 	.q      ( fb_dat_o           ),
 	.rreq   ( read_fifo          ),
 	.nword  ( fb_data_fifo_nword ),
@@ -266,10 +267,13 @@ module vga_lcd (
   );
   
   // Continuous assignments
-  assign csr_ack_i = 1'b1;  // csr_ack_i has not been implemented yet(Single cycle synchronous SRAM memory)
   
   // Pack sequencer stage output into one wire group
-  assign fb_dat_i = { horiz_sync_seq_o, vert_sync_seq_o, video_on_h_seq_o, video_on_v_seq_o, character_seq_o[7:0] };
+  assign fb_dat_i = { horiz_sync_seq_o,
+                      vert_sync_seq_o,
+                      video_on_h_seq_o,
+                      video_on_v_seq_o,
+                      character_seq_o[7:0] };
   
   // Unpack fb_dat_o back into seperate wires
   assign fb_horiz_sync_seq_o = fb_dat_o [11];
@@ -278,41 +282,57 @@ module vga_lcd (
   assign fb_video_on_v_seq_o = fb_dat_o [8];
   assign fb_character_seq_o = fb_dat_o [7:0];
   
-  assign fifo_low = ~fb_data_fifo_nword[4] & ~fb_data_fifo_nword[3];       // Allow fifo to over fill to complete memory cycle
+  // Do not stall memory cycle during request, active or acknowledgement phases
+  assign mem_cyc_active = mem_cyc_p[0] | mem_cyc_p[1] | mem_cyc_p[2] | mem_cyc_p[3]; // Is there an active memory in progess request?
     
+  // What level is the pixel fifo at?
+  assign fifo_low = ~fb_data_fifo_nword[4] & ~fb_data_fifo_nword[3];
+  
   // Determine next crtc/sequencer cycle
-  assign mem_cyc = csr_stb_o;                                              // Is there an active memory cycle in progress?
-  assign mem_cyc_complete = csr_stb_o & csr_ack_i;                         // Has the memory cycle completed?
-  assign fill_fifo = fifo_low;                                             // The fifo can be filled until it is full
-  assign next_crtc_seq_cyc = (mem_cyc_complete | (fill_fifo & !mem_cyc));  // Keep the fifo full but do not stall active memory cycle
+    
+  // The next_crtc_seq_cyc should occur during mem cycle or when fifo needs filled
+  assign next_crtc_seq_cyc = mem_cyc_active | fifo_low;
   
   // These signals enable and control when the next crtc/sequencer cycle should occur
   assign enable_crtc = next_crtc_seq_cyc;
   assign enable_sequencer = next_crtc_seq_cyc;
   
-  // Determine when next cycle in pal_dac should occur
-  // Provide steady signal to read next fifo value 
-  //assign read_fifo = (four_cyc_counter == 2'b01) ? 1'b1 : 1'b0;            // Read fifo on cycle count 1 (100Mhz version)
-  assign read_fifo = next_crtc_seq_cyc;  // 25Mhz version works
-    
-  // Provide steady 25Mhz signal for pal_dac stage (Assumes 100Mhz base clock)
-  //assign next_pal_dac_cyc = (four_cyc_counter == 2'b11) ? 1'b1 : 1'b0;     // Generate next pal_dac pulse on cycle count 3 (100Mhz)
-  assign next_pal_dac_cyc = next_crtc_seq_cyc;  // 25Mhz version works
+  // When the next_crtc_seq_cyc occurs we should place another pixel in fifo
+  assign fill_fifo = next_crtc_seq_cyc;
   
   // This signal enables and controls when the next pal_dac cycle should occure
-  //assign enable_pal_dac = next_pal_dac_cyc;  // 100Mhz version
-  assign enable_pal_dac = next_pal_dac_cyc;  // 25Mhz version works
-  
+  assign enable_pal_dac = next_pal_dac_cyc;  // 100 Mhz version
+   
   // Behaviour
   // Provide counter for pal_dac stage
   always @(posedge clk)
   if (rst)
     begin
-      four_cyc_counter = 2'b00;
+      four_cyc_counter <= 2'b00;
     end
   else
     begin
-      four_cyc_counter = four_cyc_counter + 2'b01;  // Roll over every four cycles
+      if (four_cyc_counter == 2'b01)  // Toggle read_fifo
+		  read_fifo <= 1'b1;
+		else read_fifo <= 1'b0;
+		
+		if (four_cyc_counter == 2'b01)  // Toggle next_pal_dac_cyc
+		  next_pal_dac_cyc <=1'b1;
+		else next_pal_dac_cyc <= 1'b0;
+		
+		four_cyc_counter <= four_cyc_counter + 2'b01;  // Roll over every four cycles
+		  
     end
+    
+    // mem_cyc_p pipe
+  always @(posedge clk)
+    if (rst)
+      begin
+        mem_cyc_p <= 4'b0;
+      end
+    else
+      begin
+        mem_cyc_p <= { mem_cyc_p[2:0], csr_stb_o };
+      end
   
 endmodule

@@ -1,7 +1,7 @@
 /*
  *  CRTC controller for VGA
  *  Copyright (C) 2010  Zeus Gomez Marmolejo <zeus@aluzina.org>
- *  with modifications by Charley Picker <charleypicker@yahoo.com>
+ *  with modifications by Charley Picker>
  *
  *  This file is part of the Zet processor. This processor is free
  *  hardware; you can redistribute it and/or modify it under the terms of
@@ -19,7 +19,7 @@
  */
 
 module vga_crtc (
-    input         clk,              // 25 Mhz clock
+    input         clk,              // 100 Mhz clock
     input         rst,
     
     input         enable_crtc,
@@ -69,7 +69,6 @@ module vga_crtc (
   assign ver_sync_beg = st_ver_retr;
   assign ver_sync_end = end_ver_retr + 4'd1;
   
-  // Behaviour
   // Sync generation & timing process
   // Generate horizontal and vertical timing signals for video signal
   always @(posedge clk)
