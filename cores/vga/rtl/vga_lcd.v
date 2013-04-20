@@ -28,7 +28,9 @@ module vga_lcd (
     // CSR slave interface for reading
     output [17:1] csr_adr_o,
     input  [15:0] csr_dat_i,
+    output        csr_cyc_o,
     output        csr_stb_o,
+    // input         csr_ack_i,  // not implemented yet
 
     // attribute_ctrl
     input  [3:0] pal_addr,
@@ -106,6 +108,9 @@ module vga_lcd (
   wire mem_cyc_active;
   reg [3:0] mem_cyc_p;
   
+  wire csr_adr_o_temp;
+  wire csr_stb_o_temp;
+    
   reg read_fifo;
   wire fill_fifo;
   wire fifo_low;
@@ -122,7 +127,7 @@ module vga_lcd (
     
   // Module instances
   vga_crtc crtc (
-    .clk (clk),              // 25 Mhz clock
+    .clk (clk),              // 100 Mhz clock
     .rst (rst),
     
     .enable_crtc (enable_crtc),
@@ -157,7 +162,7 @@ module vga_lcd (
   );
   
   vga_sequencer sequencer (
-    .clk (clk),              // 25 Mhz clock
+    .clk (clk),              // 100 Mhz clock
     .rst (rst),
     
     .enable_sequencer (enable_sequencer),
@@ -181,7 +186,7 @@ module vga_lcd (
     // CSR slave interface for reading
     .csr_adr_o (csr_adr_o),
     .csr_dat_i (csr_dat_i),
-    .csr_stb_o (csr_stb_o),
+    .csr_stb_o (csr_stb_o_temp),
 
     // CRTC
     .cur_start (cur_start),
@@ -219,7 +224,7 @@ module vga_lcd (
   );
   
   vga_pal_dac pal_dac (
-    .clk (clk),              // 25 Mhz clock
+    .clk (clk),              // 100 Mhz clock
     .rst (rst),
     
     .enable_pal_dac (enable_pal_dac),
@@ -282,9 +287,10 @@ module vga_lcd (
   assign fb_video_on_v_seq_o = fb_dat_o [8];
   assign fb_character_seq_o = fb_dat_o [7:0];
   
-  // Do not stall memory cycle during request, active or acknowledgement phases
-  assign mem_cyc_active = mem_cyc_p[0] | mem_cyc_p[1] | mem_cyc_p[2] | mem_cyc_p[3]; // Is there an active memory in progess request?
-    
+  // Do not stall memory cycle during active or acknowledgement phases
+  // assign csr_ack_i = 1'b1;  // csr_ack_i has not been implemented yet
+  assign mem_cyc_active = mem_cyc_p[0] | mem_cyc_p[1] | mem_cyc_p[2] | mem_cyc_p[3]; // Is there an active memory cycle in progess request?
+  
   // What level is the pixel fifo at?
   assign fifo_low = ~fb_data_fifo_nword[4] & ~fb_data_fifo_nword[3];
   
@@ -293,6 +299,13 @@ module vga_lcd (
   // The next_crtc_seq_cyc should occur during mem cycle or when fifo needs filled
   assign next_crtc_seq_cyc = mem_cyc_active | fifo_low;
   
+  // Disconnect csr_adr_o, csr_stb_o & csr_cyc_o from wishbone bus during a stall condition
+  // assign csr_adr_o = next_crtc_seq_cyc ? csr_adr_o_temp : 1'b0;
+  // wire csr_adr_o = csr_adr_o_temp;
+  assign csr_stb_o = next_crtc_seq_cyc ? csr_stb_o_temp : 1'b0;
+  // wire csr_stb_o = csr_stb_o_temp;
+  // assign csr_cyc_o = next_crtc_seq_cyc ? mem_cyc_active : 1'b0;
+    
   // These signals enable and control when the next crtc/sequencer cycle should occur
   assign enable_crtc = next_crtc_seq_cyc;
   assign enable_sequencer = next_crtc_seq_cyc;
@@ -331,8 +344,9 @@ module vga_lcd (
         mem_cyc_p <= 4'b0;
       end
     else
-      begin
-        mem_cyc_p <= { mem_cyc_p[2:0], csr_stb_o };
-      end
+      if (next_crtc_seq_cyc)
+        begin
+          mem_cyc_p <= { mem_cyc_p[2:0], csr_stb_o };
+        end
   
 endmodule
