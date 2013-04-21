@@ -63,6 +63,7 @@ set_global_assignment -name VERILOG_FILE ../../../cores/vga/rtl/vga_config_iface
 set_global_assignment -name VERILOG_FILE ../../../cores/vga/rtl/vga_char_rom.v
 set_global_assignment -name VERILOG_FILE ../../../cores/vga/rtl/vga_c4_iface.v
 set_global_assignment -name VERILOG_FILE ../../../cores/vga/rtl/vga.v
+set_global_assignment -name VERILOG_FILE ../../../cores/fmlarb/rtl/fmlarb.v
 set_global_assignment -name VERILOG_FILE ../../../cores/hpdmc_sdr16/rtl/hpdmc_sdrio.v
 set_global_assignment -name VERILOG_FILE ../../../cores/hpdmc_sdr16/rtl/hpdmc_mgmt.v
 set_global_assignment -name VERILOG_FILE ../../../cores/hpdmc_sdr16/rtl/hpdmc_datactl.v
