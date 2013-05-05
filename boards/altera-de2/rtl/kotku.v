@@ -1,6 +1,7 @@
 /*
  *  Zet SoC top level file for Altera DE2 board
  *  Copyright (C) 2009, 2010  Zeus Gomez Marmolejo <zeus@aluzina.org>
+ *  VGA SDRAM support added by Charley Picker <charleypicker@yahoo.com>
  *
  *  This file is part of the Zet processor. This processor is free
  *  hardware; you can redistribute it and/or modify it under the terms of
@@ -225,6 +226,7 @@ module kotku (
   wire        gpio_ack_o;
 
   // wires to SDRAM controller
+  // cross clock domain synchronized signals
   wire [19:1] fmlbrg_adr_s;
   wire [15:0] fmlbrg_dat_w_s;
   wire [15:0] fmlbrg_dat_r_s;
@@ -235,6 +237,7 @@ module kotku (
   wire        fmlbrg_we_s;
   wire        fmlbrg_ack_s;
 
+  // wires to FML Bridge
   wire [19:1] fmlbrg_adr;
   wire [15:0] fmlbrg_dat_w;
   wire [15:0] fmlbrg_dat_r;
@@ -273,7 +276,7 @@ module kotku (
   wire [15:0] csr_dw;
   wire [15:0] csr_dr_hpdmc;
 
-  // wires to hpdmc slave interface 
+  // FML Arbiter Slave wires to hpdmc 
   wire [22:0] fml_adr;
   wire        fml_stb;
   wire        fml_we;
@@ -282,15 +285,24 @@ module kotku (
   wire [15:0] fml_di;
   wire [15:0] fml_do;
   
-  // wires to fml bridge master interface 
-  wire [19:0] fml_fmlbrg_adr;
-  wire        fml_fmlbrg_stb;
-  wire        fml_fmlbrg_we;
-  wire        fml_fmlbrg_ack;
-  wire [ 1:0] fml_fmlbrg_sel;
-  wire [15:0] fml_fmlbrg_di;
-  wire [15:0] fml_fmlbrg_do;
-
+  // VGA Memory Master wires to fml arbiter
+  wire [19:0] vga_fml_adr_o;
+  wire        vga_fml_stb_o;
+  wire        vga_fml_we_o;
+  wire        vga_fml_ack_i;
+  wire [ 1:0] vga_fml_sel_o;
+  wire [15:0] vga_fml_di;
+  wire [15:0] vga_fml_do;
+  
+  // FML Bridge Master wires to fml arbiter 
+  wire [19:0] fmlbrg_fml_adr_o;
+  wire        fmlbrg_fml_stb_o;
+  wire        fmlbrg_fml_we_o;
+  wire        fmlbrg_fml_ack_i;
+  wire [ 1:0] fmlbrg_fml_sel_o;
+  wire [15:0] fmlbrg_fml_di;
+  wire [15:0] fmlbrg_fml_do;
+  
   // wires to default stb/ack
   wire        def_cyc_i;
   wire        def_stb_i;
@@ -454,13 +466,13 @@ module kotku (
     .wb_ack_o (fmlbrg_ack),
 
     // FML master 1 interface
-    .fml_adr (fml_fmlbrg_adr),
-    .fml_stb (fml_fmlbrg_stb),
-    .fml_we  (fml_fmlbrg_we),
-    .fml_ack (fml_fmlbrg_ack),
-    .fml_sel (fml_fmlbrg_sel),
-    .fml_do  (fml_fmlbrg_do),
-    .fml_di  (fml_fmlbrg_di)
+    .fml_adr (fmlbrg_fml_adr_o),
+    .fml_stb (fmlbrg_fml_stb_o),
+    .fml_we  (fmlbrg_fml_we_o),
+    .fml_ack (fmlbrg_fml_ack_i),
+    .fml_sel (fmlbrg_fml_sel_o),
+    .fml_do  (fmlbrg_fml_do),
+    .fml_di  (fmlbrg_fml_di)
   );
 
   wb_abrgr wb_csrbrg (
@@ -517,23 +529,23 @@ module kotku (
     .sys_clk (sdram_clk),
 	.sys_rst (rst),
 	
-	// Master 0 interface - Reserved video memory port has highest priority
-	.m0_adr ({3'b001, 20'b0}),  // 1 - 2 MB Addressable memory range
-	.m0_stb (1'b0),
-	.m0_we  (1'b0),
-	.m0_ack (),
-	.m0_sel (2'b00),
-	.m0_di  (16'h0000),
-	.m0_do  (),
+	// Master 0 interface - VGA Memory Interface has has highest priority
+	.m0_adr ({3'b001, vga_fml_adr_o}),  // 1 - 2 MB Addressable memory range
+	.m0_stb (vga_fml_stb_o),
+	.m0_we  (vga_fml_we_o),
+	.m0_ack (vga_fml_ack_i),
+	.m0_sel (vga_fml_sel_o),
+	.m0_di  (vga_fml_di),
+	.m0_do  (vga_fml_do),
 		
 	// Master 1 interface - Wishbone FML bridge
-	.m1_adr ({3'b000, fml_fmlbrg_adr}),  // 0 - 1 MB Addressable memory range
-	.m1_stb (fml_fmlbrg_stb),
-	.m1_we  (fml_fmlbrg_we),
-	.m1_ack (fml_fmlbrg_ack),
-	.m1_sel (fml_fmlbrg_sel),
-	.m1_di  (fml_fmlbrg_do),
-	.m1_do  (fml_fmlbrg_di),
+	.m1_adr ({3'b000, fmlbrg_fml_adr_o}),  // 0 - 1 MB Addressable memory range
+	.m1_stb (fmlbrg_fml_stb_o),
+	.m1_we  (fmlbrg_fml_we_o),
+	.m1_ack (fmlbrg_fml_ack_i),
+	.m1_sel (fmlbrg_fml_sel_o),
+	.m1_di  (fmlbrg_fml_do),
+	.m1_do  (fmlbrg_fml_di),
 	
 	// Master 2 interface - not connected
 	.m2_adr ({3'b010, 20'b0}),  // 2 - 3 MB Addressable memory range
@@ -671,13 +683,23 @@ module kotku (
     .vga_blue_o  (tft_lcd_b_),
     .horiz_sync  (tft_lcd_hsync_),
     .vert_sync   (tft_lcd_vsync_),
-
+    
+    // VGA FML SDRAM master Interface
+    .vga_fml_adr_o(vga_fml_adr_o),
+	.vga_fml_stb_o(vga_fml_stb_o),
+	.vga_fml_we_o(vga_fml_we_o),
+	.vga_fml_ack_i(vga_fml_ack_i),
+	.vga_fml_sel_o(vga_fml_sel_o),
+	.vga_fml_di(vga_fml_di),
+	.vga_fml_do(vga_fml_do)
+/*
     // CSR SRAM master interface
     .csrm_adr_o (csrm_adr_o),
     .csrm_sel_o (csrm_sel_o),
     .csrm_we_o  (csrm_we_o),
     .csrm_dat_o (csrm_dat_o),
     .csrm_dat_i (csrm_dat_i)
+*/
   );
 
   csr_sram csr_sram (
