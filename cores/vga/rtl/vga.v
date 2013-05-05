@@ -1,6 +1,7 @@
 /*
  *  VGA top level file
  *  Copyright (C) 2010  Zeus Gomez Marmolejo <zeus@aluzina.org>
+ *  VGA SDRAM support added by Charley Picker <charleypicker@yahoo.com>
  *
  *  This file is part of the Zet processor. This processor is free
  *  hardware; you can redistribute it and/or modify it under the terms of
@@ -37,22 +38,21 @@ module vga (
     output [ 3:0] vga_blue_o,
     output        horiz_sync,
     output        vert_sync,
-
-    // CSR SRAM master interface
-    output [17:1] csrm_adr_o,
-    output [ 1:0] csrm_sel_o,
-    output        csrm_we_o,
-    output [15:0] csrm_dat_o,
-    input  [15:0] csrm_dat_i
+    
+    // VGA FML SDRAM Master Interface
+    output [19:0] vga_fml_adr_o,
+	output        vga_fml_stb_o,
+	output        vga_fml_we_o,
+	input         vga_fml_ack_i,
+	output [ 1:0] vga_fml_sel_o,
+	input  [15:0] vga_fml_di,
+	output [15:0] vga_fml_do
   );
 
 
   // Registers and nets
   //
-  // csr address
-  reg  [17:1] csr_adr_i;
-  reg         csr_stb_i;
-
+  
   // Config wires
   wire [15:0] conf_wb_dat_o;
   wire        conf_wb_ack_o;
@@ -60,11 +60,17 @@ module vga (
   // Mem wires
   wire [15:0] mem_wb_dat_o;
   wire        mem_wb_ack_o;
+  
+  wire [19:1] wbm_adr_o;
+  wire [19:1] lcdm_adr_o;  
 
   // LCD wires
-  wire [17:1] csr_adr_o;
-  wire [15:0] csr_dat_i;
-  wire        csr_stb_o;
+  wire [17:1] lcd_adr_o;
+  wire [15:0] lcdm_dat_i;
+  wire [ 1:0] lcdm_sel_o;
+  wire        lcdm_cyc_o;
+  wire        lcdm_stb_o;
+  wire        lcdm_ack_i;	
   wire        v_retrace;
   wire        vh_retrace;
   wire        w_vert_sync;
@@ -86,8 +92,8 @@ module vga (
   wire [ 3:0] color_compare;
   wire [ 3:0] color_dont_care;
 
-  // Wishbone master to SRAM
-  wire [17:1] wbm_adr_o;
+  // Wishbone master to SDRAM
+  wire [17:1] wb_adr_o;
   wire [ 1:0] wbm_sel_o;
   wire        wbm_we_o;
   wire [15:0] wbm_dat_o;
@@ -208,10 +214,13 @@ module vga (
     .dac_write_data_register (dac_write_data_register),
     .dac_write_data          (dac_write_data),
 
-    .csr_adr_o (csr_adr_o),
-    .csr_dat_i (csr_dat_i),
-    .csr_stb_o (csr_stb_o),
-
+    .lcd_adr_o(lcd_adr_o),
+	.lcd_dat_i(lcdm_dat_i),
+	.lcd_sel_o(lcdm_sel_o),
+	.lcd_cyc_o(lcdm_cyc_o),
+	.lcd_stb_o(lcdm_stb_o),
+	.lcd_ack_i(lcdm_ack_i),
+	
     .vga_red_o   (vga_red_o),
     .vga_green_o (vga_green_o),
     .vga_blue_o  (vga_blue_o),
@@ -250,7 +259,7 @@ module vga (
     .wbs_stb_i (stb & !wb_tga_i),
     .wbs_ack_o (mem_wb_ack_o),
 
-    .wbm_adr_o (wbm_adr_o),
+    .wbm_adr_o (wb_adr_o),
     .wbm_sel_o (wbm_sel_o),
     .wbm_we_o  (wbm_we_o),
     .wbm_dat_o (wbm_dat_o),
@@ -272,27 +281,34 @@ module vga (
     .color_dont_care  (color_dont_care)
   );
 
-  vga_mem_arbitrer mem_arbitrer (
+  vga_mem_arbitrer #(
+    .fml_depth(20)  // 1024KB Memory size
+  ) mem_arbitrer (
     .clk_i (wb_clk_i),
     .rst_i (wb_rst_i),
 
-    .wb_adr_i (wbm_adr_o),
-    .wb_sel_i (wbm_sel_o),
-    .wb_we_i  (wbm_we_o),
-    .wb_dat_i (wbm_dat_o),
-    .wb_dat_o (wbm_dat_i),
-    .wb_stb_i (wbm_stb_o),
-    .wb_ack_o (wbm_ack_i),
-
-    .csr_adr_i (csr_adr_i),
-    .csr_dat_o (csr_dat_i),
-    .csr_stb_i (csr_stb_i),
-
-    .csrm_adr_o (csrm_adr_o),
-    .csrm_sel_o (csrm_sel_o),
-    .csrm_we_o  (csrm_we_o),
-    .csrm_dat_o (csrm_dat_o),
-    .csrm_dat_i (csrm_dat_i)
+    .cpu_adr_i (wbm_adr_o),
+    .cpu_sel_i (wbm_sel_o),
+    .cpu_we_i  (wbm_we_o),
+    .cpu_dat_i (wbm_dat_o),
+    .cpu_dat_o (wbm_dat_i),
+    .cpu_stb_i (wbm_stb_o),
+    .cpu_ack_o (wbm_ack_i),
+    
+    .lcd_adr_i (lcdm_adr_o),
+	.lcd_dat_o (lcdm_dat_i),
+	.lcd_sel_i (lcdm_sel_o),
+	.lcd_cyc_i (lcdm_cyc_o),
+	.lcd_stb_i (lcdm_stb_o),
+	.lcd_ack_o (lcdm_ack_i),
+	
+	.fml_adr_o (vga_fml_adr_o),
+	.fml_stb_o (vga_fml_stb_o),
+	.fml_we_o  (vga_fml_we_o),
+	.fml_ack_i (vga_fml_ack_i),
+	.fml_sel_o (vga_fml_sel_o),
+	.fml_di    (vga_fml_di),
+	.fml_do    (vga_fml_do)
   );
 
   // Continous assignments
@@ -300,14 +316,11 @@ module vga (
   assign wb_ack_o  = wb_tga_i ? conf_wb_ack_o : mem_wb_ack_o;
   assign stb       = wb_stb_i & wb_cyc_i;
   assign vert_sync = ~graphics_alpha ^ w_vert_sync;
-
-  // Behaviour
-  // csr_adr_i
-  always @(posedge wb_clk_i)
-    csr_adr_i <= wb_rst_i ? 17'h0 : csr_adr_o + start_addr[15:1];
-
-  // csr_stb_i
-  always @(posedge wb_clk_i)
-    csr_stb_i <= wb_rst_i ? 1'b0 : csr_stb_o;
-
+  
+  // Translate video memory address to full 1024KB address space
+  // Add additional bits for wb memory access  
+  assign wbm_adr_o = {2'b0, wb_adr_o};
+  // Add video configuration lcd base address to lcd offset
+  assign lcdm_adr_o = lcd_adr_o + start_addr[15:1];
+  
 endmodule

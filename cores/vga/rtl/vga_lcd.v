@@ -1,7 +1,7 @@
 /*
  *  LCD controller for VGA
  *  Copyright (C) 2010  Zeus Gomez Marmolejo <zeus@aluzina.org>
- *  with modifications by Charley Picker <charleypicker@yahoo.com>
+ *  VGA SDRAM support added by Charley Picker <charleypicker@yahoo.com>
  *
  *  This file is part of the Zet processor. This processor is free
  *  hardware; you can redistribute it and/or modify it under the terms of
@@ -25,12 +25,21 @@ module vga_lcd (
     input shift_reg1,       // if set: 320x200
     input graphics_alpha,   // if not set: 640x400 text mode
 
+    output [17:1] lcd_adr_o,
+	input  [15:0] lcd_dat_i,
+	output [ 1:0] lcd_sel_o,
+	output        lcd_cyc_o,
+	output        lcd_stb_o,
+	input         lcd_ack_i,
+	
+/*
     // CSR slave interface for reading
     output [17:1] csr_adr_o,
     input  [15:0] csr_dat_i,
     output        csr_cyc_o,
     output        csr_stb_o,
     // input         csr_ack_i,  // not implemented yet
+*/
 
     // attribute_ctrl
     input  [3:0] pal_addr,
