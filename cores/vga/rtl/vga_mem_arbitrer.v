@@ -57,8 +57,14 @@ module vga_mem_arbitrer #(
   wire [ 2:0] cpu_req_offset;
   
   reg [fml_depth-3-1:4] cpu_data_address;
-  wire req_cpu_address_matched;
+  reg cpu_datamem_valid, cpu_datamem_dirty;
+  wire cpu_set_cpu_datamem_dirty;
+  
+  wire req_cpu_address_matched_cpu;
+  
   wire req_new_cpu_address;
+  
+  wire cpu_datamem_wb_ack;
   
   wire [2:0]  cpu_datamem_a;
   wire [1:0]  cpu_datamem_we;
@@ -66,12 +72,7 @@ module vga_mem_arbitrer #(
   wire [15:0] cpu_datamem_do;
   
   wire [2:0]  cpu_datamem_a2;
-  wire [15:0] cpu_datamem_do2;
-  
-  wire cpu_datamem_wb_ack;
-  
-  reg cpu_datamem_valid, cpu_datamem_dirty;
-  wire cpu_set_cpu_datamem_dirty;
+  wire [15:0] cpu_datamem_do2;  
     
   // LCD Registers and nets
   wire lcd_data_op;
@@ -79,8 +80,15 @@ module vga_mem_arbitrer #(
   wire [ 2:0] lcd_req_offset;
   
   reg [fml_depth-3-1:4] lcd_data_address;
-  wire req_lcd_address_matched;
+  reg lcd_datamem_valid;
+  
+  wire req_lcd_address_matched_lcd;
+  wire req_lcd_address_matched_cpu;
+  wire req_lcd_cpu_address_matched;
+       
   wire req_new_lcd_address;
+  
+  wire lcd_datamem_wb_ack;
   
   wire [2:0]  lcd_datamem_a;
   wire [1:0]  lcd_datamem_we;
@@ -89,20 +97,14 @@ module vga_mem_arbitrer #(
   
   wire [2:0]  lcd_datamem_a2;
   wire [15:0] lcd_datamem_do2;
-  
-  wire req_lcd_address_matched_cpu;
-  wire lcd_datamem_wb_ack;
-  
-  reg lcd_datamem_valid;
-     
+    
   // FML Arbitrer Registers and nets
-  wire [15:0] cpu_dat_op_mux;
+  wire [15:0] cpu_dat_do_mux;
   wire [15:0] lcd_dat_op_mux;
   wire [15:0] cpu_dat2_op_mux;
   
   wire req_cpu_lcd_address_matched;
-  wire wait_cpu_read_write_fml;
-  
+    
   reg fml_load_req_cpu_data_address;
   reg fml_set_cpu_datamem_valid;
   reg fml_rst_cpu_datamem_valid;
@@ -117,56 +119,64 @@ module vga_mem_arbitrer #(
   reg fml_rst_burst_count;
   reg fml_next_burst_count;
   
+  reg fml_write_cpu_datamem;
+  reg fml_write_lcd_datamem;
+  
   // CPU Continuous assignments
   assign cpu_data_op = cpu_stb_i & cpu_cyc_i;
   assign cpu_req_address = cpu_adr_i[fml_depth-3-1:4];
   assign cpu_req_offset  = cpu_adr_i[ 3:1];
   
-  assign req_cpu_address_matched = (cpu_data_address == cpu_req_address);
+  assign req_cpu_address_matched_cpu = (cpu_req_address == cpu_data_address);
   
   assign cpu_set_cpu_datamem_dirty = cpu_data_op & cpu_datamem_valid & cpu_we_i;
   
-  assign cpu_datamem_wb_ack = cpu_data_op & cpu_datamem_valid & req_cpu_address_matched;
+  assign req_new_cpu_address = cpu_data_op & !(cpu_datamem_valid & req_cpu_address_matched_cpu);
   
-  assign req_new_cpu_address = cpu_data_op & (!cpu_datamem_valid | !req_cpu_address_matched);   
+  assign cpu_datamem_wb_ack = cpu_data_op & cpu_datamem_valid & req_cpu_address_matched_cpu;  
   
   // LCD Continuous assignments
   assign lcd_data_op = lcd_stb_i & lcd_cyc_i;
   assign lcd_req_address = lcd_adr_i[fml_depth-3-1:4];
   assign lcd_req_offset  = lcd_adr_i[ 3:1];
   
-  assign req_lcd_address_matched = (lcd_data_address == lcd_req_address);  
-  assign req_new_lcd_address = lcd_data_op & (!lcd_datamem_valid | !req_lcd_address_matched);
+  assign req_lcd_address_matched_lcd = (lcd_req_address == lcd_data_address);
+  assign req_lcd_address_matched_cpu = (lcd_req_address == cpu_data_address);
+  assign req_lcd_cpu_address_matched = (lcd_req_address == cpu_req_address);  
   
-  assign req_lcd_address_matched_cpu = (lcd_req_address == cpu_data_address);  
-  assign lcd_datamem_wb_ack = (lcd_data_op & lcd_datamem_valid & req_lcd_address_matched) |  
-                              (lcd_data_op & cpu_datamem_valid & req_lcd_address_matched_cpu); 
+  assign lcd_datamem_wb_ack = lcd_data_op & ( (lcd_datamem_valid & req_lcd_address_matched_lcd) |
+                                              (cpu_datamem_valid & req_lcd_address_matched_cpu)   );
   
-  // FML Arbritrer Continuous assignments
-  assign req_cpu_lcd_address_matched = (cpu_req_address == lcd_req_address);
+  assign req_new_lcd_address = lcd_data_op & !( (lcd_datamem_valid & req_lcd_address_matched_lcd) |
+                                                (cpu_datamem_valid & req_lcd_address_matched_cpu) |
+                                                (cpu_data_op & req_lcd_cpu_address_matched)        );
+                               
     
+  // FML Arbritrer Continuous assignments
+      
   // Only the cpu data will ever be written to sdram
-  assign fml_do = cpu_datamem_do;
+  assign fml_do = cpu_datamem_valid ? 16'b0 : cpu_datamem_do;
     
   assign fml_sel_o = 2'b11;  
-    
+  
   // cpu_datamem Continuous assignments
-  assign cpu_datamem_a  = cpu_datamem_valid ? (cpu_data_op ? cpu_req_offset : 3'b0)
-                                            : fml_burst_count;
-  assign cpu_datamem_we = cpu_datamem_valid ? ( cpu_data_op ? (cpu_we_i ? cpu_sel_i : 2'b0)
-                                                            : 2'b0 )
-                                            : (fml_we_o ? fml_sel_o : 2'b0); 
-  assign cpu_datamem_di = cpu_datamem_valid ? (cpu_data_op ? cpu_dat_i : 16'b0)
-                                            : fml_di;
+  assign cpu_datamem_a  = cpu_datamem_wb_ack ? (cpu_data_op ? cpu_req_offset : 3'b0)
+                                             : fml_burst_count;
+  assign cpu_datamem_we = cpu_datamem_wb_ack ? ( cpu_data_op ? (cpu_we_i ? cpu_sel_i : 2'b0)
+                                                             : 2'b0 )
+                                             : (fml_write_cpu_datamem ? fml_sel_o : 2'b0);
+  assign cpu_datamem_di = cpu_datamem_wb_ack ? (cpu_data_op ? cpu_dat_i : 16'b0)
+                                             : fml_di;
                                             
-  assign cpu_dat_op_mux = cpu_data_op ? { (lcd_sel_i[1] ? cpu_datamem_do[15:8] : 8'b0),
-                                          (lcd_sel_i[0] ? cpu_datamem_do[7:0] : 8'b0) }
-                                      : 16'b0;
-  assign cpu_dat_o      = cpu_datamem_valid ? cpu_dat_op_mux : 16'b0;
+  assign cpu_dat_do_mux = cpu_datamem_wb_ack ? { (cpu_sel_i[1] ? cpu_datamem_do[15:8] : 8'b0),
+                                                 (cpu_sel_i[0] ? cpu_datamem_do[7:0] : 8'b0) }
+                                             : 16'b0;
+  // assign cpu_dat_o      = cpu_datamem_valid ? cpu_datamem_do : 16'b0;
+  assign cpu_dat_o      = cpu_datamem_wb_ack ? cpu_dat_do_mux : 16'b0;
                                               
-  assign cpu_datamem_a2 = lcd_datamem_valid ? (lcd_data_op ? lcd_req_offset : 3'b0)
-                                            : 3'b0;  
-    
+  assign cpu_datamem_a2 = lcd_datamem_wb_ack ? (lcd_data_op ? lcd_req_offset : 3'b0)
+                                             : 3'b0;  
+  
   vga_arb_datamem #(
 	.depth(3)
   ) cpu_datamem (
@@ -183,17 +193,17 @@ module vga_mem_arbitrer #(
 
   
   // lcd_datamem Continuous assignments
-  assign lcd_datamem_a  = lcd_datamem_valid ? (lcd_data_op ? lcd_req_offset : 3'b0 )
-                                            : fml_burst_count;
-  assign lcd_datamem_we = lcd_datamem_valid ? 2'b0 : (fml_we_o ? fml_sel_o : 2'b0); 
-  assign lcd_datamem_di = lcd_datamem_valid ? 16'b0 : fml_di;
+  assign lcd_datamem_a  = lcd_datamem_wb_ack ? (lcd_data_op ? lcd_req_offset : 3'b0 )
+                                             : fml_burst_count;
+  assign lcd_datamem_we = lcd_datamem_wb_ack ? 2'b0 : (fml_write_lcd_datamem ? fml_sel_o : 2'b0); 
+  assign lcd_datamem_di = lcd_datamem_wb_ack ? 16'b0 : fml_di;
   
-  assign lcd_dat_op_mux = lcd_data_op ? { (lcd_sel_i[1] ? lcd_datamem_do[15:8] : 8'b0),
-                                          (lcd_sel_i[0] ? lcd_datamem_do[7:0] : 8'b0) }
-                                      : 16'b0;
-  assign cpu_dat2_op_mux = lcd_data_op ? { (lcd_sel_i[1] ? cpu_datamem_do2[15:8] : 8'b0),
-                                           (lcd_sel_i[0] ? cpu_datamem_do2[7:0] : 8'b0) }
-                                      : 16'b0;
+  assign lcd_dat_op_mux = lcd_datamem_wb_ack ? { (lcd_sel_i[1] ? lcd_datamem_do[15:8] : 8'b0),
+                                                 (lcd_sel_i[0] ? lcd_datamem_do[7:0] : 8'b0) }
+                                             : 16'b0;
+  assign cpu_dat2_op_mux = lcd_datamem_wb_ack ? { (lcd_sel_i[1] ? cpu_datamem_do2[15:8] : 8'b0),
+                                                  (lcd_sel_i[0] ? cpu_datamem_do2[7:0] : 8'b0) }
+                                              : 16'b0;
   assign lcd_dat_o       = req_lcd_address_matched_cpu ? cpu_dat2_op_mux : lcd_dat_op_mux;  
   
   vga_arb_datamem #(
@@ -212,7 +222,7 @@ module vga_mem_arbitrer #(
 	  .do2()
   );    
     
-  // CPU WB Read/Write Behavious
+  // CPU WB Read/Write Behaviour
   // CPU Reset/Set cpu_datamem_dirty
   always @(posedge clk_i)
     if (rst_i)
@@ -347,6 +357,9 @@ always @(*) begin
     
     fml_rst_burst_count = 1'b0;
     fml_next_burst_count = 1'b0;
+    
+    fml_write_cpu_datamem = 1'b0;
+    fml_write_lcd_datamem = 1'b0;
 	
 	fml_adr_o = 20'b0;
 	fml_stb_o = 1'b0;
@@ -359,23 +372,24 @@ always @(*) begin
 		  if (req_new_lcd_address)
 		    begin
 		      // Prevent data change during lcd refill phase
-		      fml_rst_lcd_datamem_valid = 1'b1;
-		      
-		      fml_load_req_lcd_data_address = 1'b1;
-		      fml_rst_burst_count = 1'b1;		      
+		      fml_rst_lcd_datamem_valid = 1'b1;		      
+		      fml_load_req_lcd_data_address = 1'b1;		      		      
 		      next_state = LCD_REFILL; 
 		    end
 		  else
 		    if(req_new_cpu_address)
 		      begin
 		        // Prevent data change during cpu evict/refill phase
-		        fml_rst_cpu_datamem_valid = 1'b1;
-		        		        
-		        fml_rst_burst_count = 1'b1;
-		        if(cpu_datamem_dirty)
+		        fml_rst_cpu_datamem_valid = 1'b1;		        		        
+		        if(cpu_datamem_dirty) begin		        
+		          fml_next_burst_count = 1'b1;
 		          next_state = CPU_EVICT;
+		        end
 		        else
 		          begin
+		            $display("fml_burst_count = %d", fml_burst_count);
+		            //fml_next_burst_count = 1'b1; // not sure
+		            //fml_write_cpu_datamem = 1'b1;		            
 		            fml_load_req_cpu_data_address = 1'b1;
 		            next_state = CPU_REFILL;		                
 		          end		          
@@ -383,10 +397,9 @@ always @(*) begin
 		end
 		
 		CPU_EVICT: begin
-		  // Write back active data address
+		  // First write back active data to sdram
 		  fml_adr_o = { cpu_data_address, 3'b0};
-		  fml_we_o = 1'b1;
-		  // fml_do = {cpu_data_ram1[0], cpu_data_ram0[0]};
+		  fml_we_o = 1'b1;		  
 		  fml_stb_o = 1'b1;
 		  if(fml_ack_i)
 		    begin
@@ -429,92 +442,102 @@ always @(*) begin
 		  if(cpu_we_i)
 		    fml_rst_cpu_datamem_dirty = 1'b0;		    
 		  else
-		    fml_rst_cpu_datamem_dirty = 1'b1;		    
-		    
-		  // cpu_data_address = cpu_req_address;
-		    
+		    fml_rst_cpu_datamem_dirty = 1'b1;		    		    
+		  // Now we can read new data from sdram
 		  fml_adr_o = { cpu_req_address, 3'b0 };
-		  // cpu_data_ram0[0] = fml_di[7:0];
-		  // cpu_data_ram1[0] = fml_di[15:8];
+		  fml_write_cpu_datamem = 1'b1;
 		  fml_stb_o = 1'b1;
 		  if(fml_ack_i)
 		    begin
-		      fml_next_burst_count = 1'b1;
+		      fml_write_cpu_datamem = 1'b1;
 		      next_state = CPU_REFILL2;    
 		    end		    		  
 		end
 		CPU_REFILL2: begin
 		  fml_next_burst_count = 1'b1;
+		  fml_write_cpu_datamem = 1'b1;
 		  next_state = CPU_REFILL3;
 		end
 		CPU_REFILL3: begin
 		  fml_next_burst_count = 1'b1;
+		  fml_write_cpu_datamem = 1'b1;
 		  next_state = CPU_REFILL4;
 		end
 		CPU_REFILL4: begin
 		  fml_next_burst_count = 1'b1;
+		  fml_write_cpu_datamem = 1'b1;
 		  next_state = CPU_REFILL5;
 		end
 		CPU_REFILL5: begin
 		  fml_next_burst_count = 1'b1;
+		  fml_write_cpu_datamem = 1'b1;
 		  next_state = CPU_REFILL6;
 		end
 		CPU_REFILL6: begin
 		  fml_next_burst_count = 1'b1;
+		  fml_write_cpu_datamem = 1'b1;
 		  next_state = CPU_REFILL7;
 		end
 		CPU_REFILL7: begin
 		  fml_next_burst_count = 1'b1;
+		  fml_write_cpu_datamem = 1'b1;
 		  next_state = CPU_REFILL8;
 		end
-		CPU_REFILL8: begin
-		  		  
+		CPU_REFILL8: begin		  		  
 		  // We can now read/write the new loaded data
 		  fml_set_cpu_datamem_valid = 1'b1;
+		  fml_write_cpu_datamem = 1'b1;
+		  fml_rst_burst_count = 1'b1; // We will always assume counter starts at zero!!
 		  next_state = IDLE;
 		end
 		
 		LCD_REFILL: begin
-		  // lcd_data_address = lcd_req_address;
-		    
+		  // Load new requested lcd data from sdram
 		  fml_adr_o = { lcd_req_address, 3'b0 };
-		  // lcd_data_ram0[0] = fml_di[7:0];
-		  // lcd_data_ram1[0] = fml_di[15:8];
+		  fml_write_lcd_datamem = 1'b1;
 		  fml_stb_o = 1'b1;
 		  if(fml_ack_i)
 		    begin
 		      fml_next_burst_count = 1'b1;
+		      fml_write_lcd_datamem = 1'b1;
 		      next_state = LCD_REFILL2;    
 		    end		    		  
 		end
 		LCD_REFILL2: begin
 		  fml_next_burst_count = 1'b1;
+		  fml_write_lcd_datamem = 1'b1;
 		  next_state = LCD_REFILL3;
 		end
 		LCD_REFILL3: begin
 		  fml_next_burst_count = 1'b1;
+		  fml_write_lcd_datamem = 1'b1;
 		  next_state = LCD_REFILL4;
 		end
 		LCD_REFILL4: begin
 		  fml_next_burst_count = 1'b1;
+		  fml_write_lcd_datamem = 1'b1;
 		  next_state = LCD_REFILL5;
 		end
 		LCD_REFILL5: begin
 		  fml_next_burst_count = 1'b1;
+		  fml_write_lcd_datamem = 1'b1;
 		  next_state = LCD_REFILL6;
 		end
 		LCD_REFILL6: begin
 		  fml_next_burst_count = 1'b1;
+		  fml_write_lcd_datamem = 1'b1;
 		  next_state = LCD_REFILL7;
 		end
 		LCD_REFILL7: begin
 		  fml_next_burst_count = 1'b1;
+		  fml_write_lcd_datamem = 1'b1;
 		  next_state = LCD_REFILL8;
 		end
-		LCD_REFILL8: begin
-		  		  
+		LCD_REFILL8: begin		  		  
 		  // We can now read the new loaded data
 		  fml_set_lcd_datamem_valid = 1'b1;
+		  fml_write_lcd_datamem = 1'b1;
+		  fml_rst_burst_count = 1'b1; // We will always assume counter starts at zero!!
 		  next_state = IDLE;
 		end
 	endcase

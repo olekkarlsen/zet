@@ -139,12 +139,13 @@ begin
 	wb_stb_i = 1'b1;
 	wb_we_i = 1'b1;
 	i = 0;
-	waitclock;
-	i = i+1;
+	// waitclock;
+	// i = i+1;
 	while(~wb_ack_o) begin
 	    i = i+1;
 		waitclock;
 	end
+	waitclock;
 	$display("WB Write: address=%h data=%h sel=%b acked in %d clocks", address, data, wb_sel_i, i);
 	wb_adr_i = 20'hx;
 	wb_cyc_i = 1'b0;
@@ -164,12 +165,13 @@ begin
 	wb_stb_i = 1'b1;
 	wb_we_i = 1'b0;
 	i = 0;
-	waitclock;
-	i = i+1;
+	// waitclock;
+	// i = i+1;
 	while(~wb_ack_o) begin
 	    i = i+1;
 		waitclock;
 	end
+	waitclock;
 	$display("WB Read : address=%h data=%h sel=%b acked in %d clocks", address, wb_dat_o, wb_sel_i, i);
 	wb_adr_i = 20'hx;
 	wb_cyc_i = 1'b0;
@@ -189,12 +191,13 @@ begin
 	lcd_stb_i = 1'b1;
 	
 	i = 0;
-	waitclock;
-	i = i+1;
+	// waitclock;
+	// i = i+1;
 	while(~lcd_ack_o) begin
 	    i = i+1;
-		waitclock;
+	  waitclock;
 	end
+	waitclock;
 	$display("LCD Read : address=%h data=%h sel=%b acked in %d clocks", address, lcd_dat_o, lcd_sel_i, i);
 	lcd_adr_i = 20'hx;
 	lcd_cyc_i = 1'b0;
@@ -225,10 +228,23 @@ always begin
 	$display("Testing: read miss");
 	wbread(20'h0, 2'b01);
 	
+	$display("Reading back values written through WB interface");
+	
+	wbread(20'h3, 2'b11);
+	wbread(20'h0, 2'b11);	
+	wbread(20'h1, 2'b11);
+	wbread(20'h2, 2'b11);
+	wbread(20'h5, 2'b11);
+	wbread(20'h6, 2'b11);
+	wbread(20'h7, 2'b11);
+	wbread(20'h4, 2'b11);
+	
 	$display("Testing: write hit");
 	wbwrite(20'h0, 16'h0123, 2'b11);
-	wbwrite(20'h1, 16'h1234, 2'b01);
-	wbwrite(20'h2, 16'h2345, 2'b10);
+	//wbwrite(20'h1, 16'h1234, 2'b01);
+	//wbwrite(20'h2, 16'h2345, 2'b10);
+	wbwrite(20'h1, 16'h1234, 2'b11);  // Temporary
+	wbwrite(20'h2, 16'h2345, 2'b11);  // Temporary
 	wbwrite(20'h3, 16'h3456, 2'b11);
 	wbwrite(20'h4, 16'h4567, 2'b11);
 	wbwrite(20'h5, 16'h5678, 2'b11);

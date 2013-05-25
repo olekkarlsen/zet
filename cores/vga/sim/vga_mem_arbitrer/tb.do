@@ -5,6 +5,7 @@ if {[file exists work]} {
 }
 
 vlib work
+vlog -work work -lint ../../rtl/vga_arb_datamem.v
 vlog -work work -lint tb_vga_mem_arbitrer.v
 vlog -work work -lint ../../rtl/vga_mem_arbitrer.v
 
@@ -16,4 +17,4 @@ add wave -hex *
 add wave -divider vga_mem_arbitrer
 add wave -hex dut/*
 
-run 1us
+run 3us
