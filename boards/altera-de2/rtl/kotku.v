@@ -365,17 +365,6 @@ module kotku (
   wire        timer_clk;
   wire        timer2_o;
 
-  // Audio only signals
-  //wire [ 7:0] aud_dat_o;
-  //wire        aud_cyc_i;
-  //wire        aud_ack_o;
-  //wire        aud_sel_cond;
-
-  // Keyboard-audio shared signals
-  //wire [ 7:0] kaud_dat_o;
-  //wire        kaud_cyc_i;
-  //wire        kaud_ack_o;
-
   wire sys_rst;
   
   reset reset (
@@ -384,31 +373,6 @@ module kotku (
     .sw   (sw_),			// user switches
     .rst  (sys_rst)     // reset out
   );
-
-//`ifndef SIMULATION
-  /*
-   * Debounce it (counter holds reset for 10.49ms),
-   * and generate power-on reset.
-   */
-//  wire rst_lck;
-//  assign rst_lck    = !sw_[0] & pll_lock;
-//  reg  [16:0] rst_debounce;
-//  initial rst_debounce <= 17'h1FFFF;
-//  reg sys_rst;
-//  initial sys_rst <= 1'b1;
-//  always @(posedge cpu_clk) begin
-//    if(~rst_lck) /* reset is active low */
-//      rst_debounce <= 17'h1FFFF;
-//    else if(rst_debounce != 17'd0)
-//      rst_debounce <= rst_debounce - 17'd1;
-//    sys_rst <= rst_debounce != 17'd0;
-//  end
-//`else
-//  wire rst_lck;
-//  assign rst_lck    = !sw_[0] & pll_lock;
-//  wire sys_rst;
-//  assign sys_rst = !rst_lck;
-//`endif
 
   // Continuous assignments
 
@@ -770,14 +734,6 @@ module kotku (
   assign spk_ack_o = spk_stb_i & spk_cyc_i;
 `endif
 
-  // Selection logic between keyboard and audio ports (port 65h: audio)
-  //assign aud_sel_cond = keyb_adr_i[2:1]==2'b00 && keyb_sel_i[1];
-  //assign aud_cyc_i    = kaud_cyc_i && aud_sel_cond;
-  //assign keyb_cyc_i   = kaud_cyc_i && !aud_sel_cond;
-  //assign kaud_ack_o   = aud_cyc_i & aud_ack_o | keyb_cyc_i & keyb_ack_o;
-  //assign kaud_dat_o   = {8{aud_cyc_i}} & aud_dat_o
-  //                      | {8{keyb_cyc_i}} & keyb_dat_o[15:8];
-
   timer timer (
     .wb_clk_i (cpu_clk),
     .wb_rst_i (sys_rst),
@@ -794,15 +750,6 @@ module kotku (
     .gate2_i  (spk_dat_o[8]),
     .out2_o   (timer2_o)
   );
-
-//  simple_pic pic0 (
-//    .clk  (clk),
-//    .rst  (rst),
-//    .intv (intv),
-//    .inta (inta),
-//    .intr (intr),
-//    .iid  (iid)
-//    );
 
   // primary interupt controller
   pic #(
@@ -1182,7 +1129,7 @@ post post (
     .s8_stb_o (fl_stb_i),
     .s8_ack_i (fl_ack_o),
 
-    // Slave 9 interface - not connected
+    // Slave 9 interface - pc speaker
     .s9_dat_i (spk_dat_o),
     .s9_dat_o (spk_dat_i),
     .s9_adr_o ({spk_tga_i, spk_adr_i}),
@@ -1202,6 +1149,7 @@ post post (
     .sA_stb_o (fmlbrg_stb_s),
     .sA_ack_i (fmlbrg_ack_s),
 
+    // Slave B interface - not connected
     .sB_dat_i (16'h0000),
     .sB_dat_o (),
     .sB_adr_o (),		// tga_s, adr_s
@@ -1211,6 +1159,7 @@ post post (
     .sB_stb_o (),
     .sB_ack_i (1'b0),
 
+    // Slave C interface - not connected
     .sC_dat_i (16'h0000),
     .sC_dat_o (),
     .sC_adr_o (),		// tga_s, adr_s
@@ -1220,6 +1169,7 @@ post post (
     .sC_stb_o (),
     .sC_ack_i (1'b0),
 
+    // Slave D interface - post code
     .sD_dat_i (post_dat_o),
     .sD_dat_o (post_dat_i),
     .sD_adr_o ({post_tga_i, post_adr_i}),		// tga_s, adr_s

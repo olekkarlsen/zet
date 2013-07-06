@@ -104,7 +104,7 @@ module pic #(
     
   // icw selection state machine
   reg [1:0] icw_sel;
-  parameter load_icw1 = 2'h0, load_icw2 = 2'h1, load_icw3 = 2'h2, load_icw4 = 2'h3;
+  localparam load_icw1 = 2'h0, load_icw2 = 2'h1, load_icw3 = 2'h2, load_icw4 = 2'h3;
   always @ (posedge wb_clk_i)
     begin
       if (wb_rst_i)
