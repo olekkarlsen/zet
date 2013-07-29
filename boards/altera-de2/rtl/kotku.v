@@ -368,10 +368,10 @@ module kotku (
   wire sys_rst;
   
   reset reset (
-    .clk  (cpu_clk),		// clk - input frequency
+    .clk  (cpu_clk),    // clk - input frequency
+    .rst  (sys_rst),    // reset out
     .lock (pll_lock),   // pll lock
-    .sw   (sw_),			// user switches
-    .rst  (sys_rst)     // reset out
+    .sw   (sw_)         // user switches    
   );
 
   // Continuous assignments
