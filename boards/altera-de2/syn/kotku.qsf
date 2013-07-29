@@ -260,8 +260,7 @@ set_location_assignment PIN_L6 -to hex7_[3]
 set_location_assignment PIN_L7 -to hex7_[4]
 set_location_assignment PIN_P9 -to hex7_[5]
 set_location_assignment PIN_N9 -to hex7_[6]
-set_location_assignment PIN_G26 -to key_[0]
-set_location_assignment PIN_N23 -to key_[1]
+set_location_assignment PIN_G26 -to key_
 set_location_assignment PIN_B25 -to uart_txd_
 set_location_assignment PIN_D26 -to ps2_kclk_
 set_location_assignment PIN_C24 -to ps2_kdat_
@@ -684,8 +683,7 @@ set_instance_assignment -name OUTPUT_PIN_LOAD 0 -to hex7_[3]
 set_instance_assignment -name OUTPUT_PIN_LOAD 0 -to hex7_[4]
 set_instance_assignment -name OUTPUT_PIN_LOAD 0 -to hex7_[5]
 set_instance_assignment -name OUTPUT_PIN_LOAD 0 -to hex7_[6]
-set_instance_assignment -name OUTPUT_PIN_LOAD 0 -to key_[0]
-set_instance_assignment -name OUTPUT_PIN_LOAD 0 -to key_[1]
+set_instance_assignment -name OUTPUT_PIN_LOAD 0 -to key_
 set_instance_assignment -name OUTPUT_PIN_LOAD 0 -to uart_txd_
 set_instance_assignment -name OUTPUT_PIN_LOAD 0 -to ps2_kclk_
 set_instance_assignment -name OUTPUT_PIN_LOAD 0 -to ps2_kdat_
