@@ -178,9 +178,9 @@ module pic #(
   
   // icw3 content
   wire [7:0] icw3_s;		// where is a slave
-  wire [2:0] icw3_id;		// what's my slave id
+  //wire [2:0] icw3_id;		// what's my slave id
   assign icw3_s[7:0] = icw3[7:0];
-  assign icw3_id[2:0] = icw3[2:0];
+  //assign icw3_id[2:0] = icw3[2:0];
   
   // icw4 content
   wire icw4_sfnm;				// special fully nested (1) or not (0)
@@ -586,12 +586,12 @@ module pic #(
   // delay int ack some clock cycles
   reg inta_r;
   reg inta_rr;
-  reg inta_rrr;
+  //reg inta_rrr;
   always @(posedge wb_clk_i)
     begin
       inta_r <= wb_rst_i ? 1'b0 : inta;
       inta_rr <= wb_rst_i ? 1'b0 : inta_r; 
-      inta_rrr <= wb_rst_i ? 1'b0 : inta_rr; 
+      //inta_rrr <= wb_rst_i ? 1'b0 : inta_rr; 
     end
 
   reg int_reset;
