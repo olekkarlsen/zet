@@ -49,7 +49,7 @@ derive_pll_clocks
 #**************************************************************
 # Set False Path
 #**************************************************************
-set_false_path -from {sys_rst} -hold -rise_to {speaker:speaker|speaker_i2c_av_config:i2c_av_config|mI2C_CTRL_CLK}
+set_false_path -from {reset:reset|rst} -hold -rise_to {speaker:speaker|speaker_i2c_av_config:i2c_av_config|mI2C_CTRL_CLK}
 
 
 #**************************************************************
